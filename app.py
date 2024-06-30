@@ -6,8 +6,10 @@ from datetime import timedelta
 
 app = Flask(__name__)
 app.secret_key = os.urandom(24)
-app.permanent_session_lifetime = timedelta(minutes=30)  # Set session timeout to 30 minutes
-logging.basicConfig(level=logging.DEBUG)
+app.permanent_session_lifetime = timedelta(minutes=30)  # Session timeout
+
+# Logging configuration
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 class ApiKeyNotSetError(Exception):
     pass
@@ -18,17 +20,16 @@ if not API_KEY:
     raise ApiKeyNotSetError("API key is not set. Please set the GEMINI_API_KEY environment variable.")
 genai.configure(api_key=API_KEY)
 
-# Create the model
+# Create the model (Gemini Pro is recommended if available)
 generation_config = {
-    "temperature": 1,
-    "top_p": 0.95,
-    "top_k": 64,
-    "max_output_tokens": 8192,
-    "response_mime_type": "text/plain",
+    "temperature": 0.8,  # Adjust for creativity (0 = deterministic, 1 = most creative)
+    "top_p": 0.95,       # Nucleus sampling for better quality responses
+    "top_k": 40,         # Consider top-k most likely tokens
+    "max_output_tokens": 1024, # Limit response length
 }
 
 model = genai.GenerativeModel(
-    model_name="gemini-1.5-flash",
+    model_name="models/chat-bison-001",  # Gemini Pro model
     generation_config=generation_config,
 )
 
@@ -45,21 +46,22 @@ def ask_question():
 
 def query_gemini_api(question, user_id):
     try:
-        # Use user_id to manage chat history
+        # Manage chat history per user
         if user_id not in session:
             session[user_id] = []
         chat_history = session[user_id]
 
-        # Start chat session with user's history
-        chat_session = model.start_chat(history=chat_history)
+        # Start/continue chat session
+        chat_session = model.start_chat(history=chat_history, context="You are a helpful AI assistant.")
 
-        # Send the question to the model
+        # Get response from Gemini
         response = chat_session.send_message(question)
 
-        # Update chat history in session
+        # Update chat history
         session[user_id] = chat_session.history
 
         return {"response": response.text}
+
     except ApiKeyNotSetError as e:
         app.logger.error(f"API Key Error: {str(e)}")
         return jsonify({"error": "API key is not set or invalid"}), 500
