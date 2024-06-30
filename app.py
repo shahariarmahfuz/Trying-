@@ -1,14 +1,21 @@
 from flask import Flask, request, jsonify, session
 import os
 import google.generativeai as genai
+import logging
+from datetime import timedelta
 
 app = Flask(__name__)
-app.secret_key = os.urandom(24)  # Set a secret key for session management
+app.secret_key = os.urandom(24)
+app.permanent_session_lifetime = timedelta(minutes=30)  # Set session timeout to 30 minutes
+logging.basicConfig(level=logging.DEBUG)
 
-# Configure API key (replace with your actual API key)
+class ApiKeyNotSetError(Exception):
+    pass
+
+# Configure API key
 API_KEY = os.environ.get("GEMINI_API_KEY")
 if not API_KEY:
-    raise ValueError("API key is not set. Please set the GEMINI_API_KEY environment variable.")
+    raise ApiKeyNotSetError("API key is not set. Please set the GEMINI_API_KEY environment variable.")
 genai.configure(api_key=API_KEY)
 
 # Create the model
@@ -53,8 +60,12 @@ def query_gemini_api(question, user_id):
         session[user_id] = chat_session.history
 
         return {"response": response.text}
+    except ApiKeyNotSetError as e:
+        app.logger.error(f"API Key Error: {str(e)}")
+        return jsonify({"error": "API key is not set or invalid"}), 500
     except Exception as e:
-        return {"error": str(e)}
+        app.logger.error(f"Error in query_gemini_api: {str(e)}")
+        return jsonify({"error": "An error occurred while processing your request"}), 500
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000)
