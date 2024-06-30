@@ -11,6 +11,12 @@ app = Flask(__name__)
 API_KEY = os.environ.get("GEMINI_API_KEY")
 genai.configure(api_key=API_KEY)
 
+def upload_to_gemini(image_data, mime_type="image/jpeg"):
+    """Uploads the given file to Gemini."""
+    file = genai.upload_file(io.BytesIO(image_data), mime_type=mime_type)
+    print(f"Uploaded file '{file.display_name}' as: {file.uri}")
+    return file
+
 # Create the model
 generation_config = {
     "temperature": 1,
@@ -21,7 +27,7 @@ generation_config = {
 }
 
 model = genai.GenerativeModel(
-    model_name="gemini-1.5-flash",
+    model_name="gemini-1.5-pro",
     generation_config=generation_config,
 )
 
@@ -49,11 +55,13 @@ def ask_image_question():
         image = Image.open(file)
         buffered = io.BytesIO()
         image.save(buffered, format="JPEG")
-        img_str = base64.b64encode(buffered.getvalue()).decode()
+        img_str = buffered.getvalue()
         
-        response = query_gemini_image_api(img_str, question)
+        gemini_file = upload_to_gemini(img_str)
+        response = query_gemini_image_api(gemini_file.uri, question)
         return jsonify(response)
     except Exception as e:
+        app.logger.error(f"Error processing image: {str(e)}")
         return jsonify({"error": str(e)}), 500
 
 def query_gemini_api(question):
@@ -64,11 +72,19 @@ def query_gemini_api(question):
     except Exception as e:
         return {"error": str(e)}
 
-def query_gemini_image_api(img_str, question):
+def query_gemini_image_api(file_uri, question):
     try:
-        chat_session = model.start_chat(history=[])
-        # Combine image string and question
-        response = chat_session.send_message(f"Image: {img_str}\nQuestion: {question}")
+        chat_session = model.start_chat(
+            history=[
+                {
+                    "role": "user",
+                    "parts": [
+                        {"type": "file", "uri": file_uri},
+                    ],
+                },
+            ]
+        )
+        response = chat_session.send_message(question)
         return {"response": response.text}
     except Exception as e:
         return {"error": str(e)}
