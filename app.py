@@ -25,10 +25,14 @@ model = genai.GenerativeModel(
     generation_config=generation_config,
 )
 
-@app.route('/ask', methods=['POST'])
+@app.route('/ask', methods=['GET', 'POST'])
 def ask_question():
-    question = request.form.get('q')
-    image_file = request.files.get('image')
+    if request.method == 'GET':
+        question = request.args.get('q')
+        image_file = None
+    else:
+        question = request.form.get('q')
+        image_file = request.files.get('image')
 
     if not question and not image_file:
         return jsonify({"error": "No question or image provided"}), 400
@@ -69,4 +73,3 @@ def query_gemini_api(question=None, image_file=None, user_id=None):
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000)
-    
