@@ -50,24 +50,30 @@ def query_gemini_api(question, user_id):
         if user_id not in session:
             session[user_id] = []
         chat_history = session[user_id]
+        
+        app.logger.info(f"Current chat history for user {user_id}: {chat_history}")
 
         # Start/continue chat session
         chat_session = model.start_chat(history=chat_history, context="You are a helpful AI assistant.")
 
         # Get response from Gemini
         response = chat_session.send_message(question)
+        
+        app.logger.info(f"Response from Gemini: {response.text}")
 
         # Update chat history
         session[user_id] = chat_session.history
+        
+        app.logger.info(f"Updated chat history for user {user_id}: {session[user_id]}")
 
-        return {"response": response.text}
+        return {"response": response.text}  # Ensure response is JSON serializable
 
     except ApiKeyNotSetError as e:
         app.logger.error(f"API Key Error: {str(e)}")
         return jsonify({"error": "API key is not set or invalid"}), 500
     except Exception as e:
         app.logger.error(f"Error in query_gemini_api: {str(e)}")
-        return jsonify({"error": "An error occurred while processing your request"}), 500
+        return jsonify({"error": f"An error occurred while processing your request: {str(e)}"}), 500
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000)
