@@ -13,16 +13,16 @@ genai.configure(api_key=API_KEY)
 
 # Create the model
 generation_config = {
-  "temperature": 1,
-  "top_p": 0.95,
-  "top_k": 64,
-  "max_output_tokens": 8192,
-  "response_mime_type": "text/plain",
+    "temperature": 1,
+    "top_p": 0.95,
+    "top_k": 64,
+    "max_output_tokens": 8192,
+    "response_mime_type": "text/plain",
 }
 
 model = genai.GenerativeModel(
-  model_name="gemini-1.5-flash",
-  generation_config=generation_config,
+    model_name="gemini-1.5-flash",
+    generation_config=generation_config,
 )
 
 @app.route('/ask', methods=['GET'])
@@ -36,21 +36,22 @@ def ask_question():
 
 @app.route('/ask_image', methods=['POST'])
 def ask_image_question():
-    if 'file' not in request.files:
-        return jsonify({"error": "No file provided"}), 400
+    if 'file' not in request.files or 'q' not in request.form:
+        return jsonify({"error": "File or question not provided"}), 400
     
     file = request.files['file']
+    question = request.form['q']
+    
     if file.filename == '':
         return jsonify({"error": "No selected file"}), 400
     
     try:
         image = Image.open(file)
-        # Convert image to base64
         buffered = io.BytesIO()
         image.save(buffered, format="JPEG")
         img_str = base64.b64encode(buffered.getvalue()).decode()
         
-        response = query_gemini_image_api(img_str)
+        response = query_gemini_image_api(img_str, question)
         return jsonify(response)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -63,10 +64,11 @@ def query_gemini_api(question):
     except Exception as e:
         return {"error": str(e)}
 
-def query_gemini_image_api(img_str):
+def query_gemini_image_api(img_str, question):
     try:
         chat_session = model.start_chat(history=[])
-        response = chat_session.send_message(img_str)
+        # Combine image string and question
+        response = chat_session.send_message(f"Image: {img_str}\nQuestion: {question}")
         return {"response": response.text}
     except Exception as e:
         return {"error": str(e)}
